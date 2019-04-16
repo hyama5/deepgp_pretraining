@@ -43,7 +43,7 @@ class Gaussian(torch.nn.Module):
         self.variance_ = torch.nn.Parameter(
             torch.from_numpy(variance_init_val.astype(NUMPY_DTYPE)))
 
-    def predictive_expectation(self, y, f_stats):
+    def predictive_expectation(self, y, f_dstr):
         r"""Calculate predictive expcextation of log likelihoods.
 
         Predictive expcextation of log likelihoods given by
@@ -52,7 +52,7 @@ class Gaussian(torch.nn.Module):
                             -1/2 (y-f)^T (y-f) / v) df
             = -N/2 log(2 \pi) - N/2 log(v) \\
                 -1/2 (y-f_mean)^T (y-f_mean) / v \\
-                -1/2 Tr[diag(f_stats['var'])] / v
+                -1/2 Tr[diag(f_dstr['var'])] / v
 
         In multidimentional cases, we sum up log likelihoods of all dims.
         """
@@ -65,15 +65,15 @@ class Gaussian(torch.nn.Module):
         size_B = y.size(0)
         size_D = y.size(1)
 
-        diff = y - f_stats['mean']
+        diff = y - f_dstr['mean']
         pe1 = -0.5 * size_B * size_D * np.log(2.0 * np.pi)
         pe2 = -0.5 * size_B * torch.sum(torch.log(variance))
         pe3 = -0.5 * torch.sum(diff * diff / variance)
-        pe4 = -0.5 * torch.sum(f_stats['var'] / variance)
+        pe4 = -0.5 * torch.sum(f_dstr['var'] / variance)
 
         return pe2 + pe3 + pe4 + pe1
 
-    def predict(self, f_stats):
+    def predict(self, f_dstr):
         r"""Calculate predictive expcextation of output variable.
 
         The predictive distribtuion is given by
@@ -81,8 +81,8 @@ class Gaussian(torch.nn.Module):
         """
         variance = positive.forward_tensor(self.variance_)
 
-        y_var = f_stats['var'] + variance.expand_as(f_stats['var'])
-        return {'mean': f_stats['mean'], 'var': y_var}
+        y_var = f_dstr['var'] + variance.expand_as(f_dstr['var'])
+        return {'mean': f_dstr['mean'], 'var': y_var}
 
 
 def inverse_probit(x):
@@ -111,7 +111,7 @@ class Bernoulli(torch.nn.Module):
 
         self._quadrature = GaussHermiteQuadrature(num_hermgauss)
 
-    def predictive_expectation(self, y, f_stats):
+    def predictive_expectation(self, y, f_dstr):
         r"""Calculate predictive expcextation of log likelihoods.
 
         Predictive expcextation of log likelihoods is given by
@@ -122,22 +122,21 @@ class Bernoulli(torch.nn.Module):
 
         The integral is computed by Gaussian-Hermite quadrature.
         """
-        def func(f_grid, y=y)
+        def func(f_grid, y=y):
             return torch.log(inverse_probit(f_grid * y[None, :, :]))
 
         pe = torch.sum(self._quadrature(
-            f_stats['mean'], torch.sqrt(f_stats['var']), func))
+            f_dstr['mean'], torch.sqrt(f_dstr['var']), func))
 
         return pe
 
-    def predict(self, f_stats):
+    def predict(self, f_dstr):
         r"""Calculate predictive expcextation of output variable.
 
         The predictive distribtuion is given by
             q(y) = \int q(f) p(y | f) df
         """
         prob_positive = inverse_probit(
-            f_stats['mean'] / torch.sqrt(1.0 + f_stats['var']))
+            f_dstr['mean'] / torch.sqrt(1.0 + f_dstr['var']))
 
         return {'prob_positive': prob_positive}
-
