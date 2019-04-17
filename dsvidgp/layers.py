@@ -74,6 +74,10 @@ class SVGPLayer(torch.nn.Module):
             torch.from_numpy(initial_inducing_input.astype(NUMPY_DTYPE)),
             requires_grad=(not fix_inducing))
 
+    def fix_inducing_(self, fix_inducing=True):
+        """Change flag to fix inducing input z."""
+        self.z.requires_grad_(not fix_inducing)
+
     def forward(self, x):
         """Infer or sample output.
 
@@ -186,6 +190,12 @@ class SVGPLayer(torch.nn.Module):
         kl = kl1 + kl2 + kl3 + kl4 + kl5
 
         return kl
+
+    def extra_repr(self):
+        """Extra information for repr()."""
+        return 'input_dim={}, output_dim={}, num_inducings={}'.format(
+            self.input_dim, self.output_dim, self.num_inducings,
+        )
 
 
 class NNLayer(torch.nn.Module):
